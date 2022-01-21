@@ -1,0 +1,444 @@
+---
+title: "Reproducible Data Science Assignment"
+author: '1048167'
+date: "21/01/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Exam Question 1
+
+Conducting a one-way between subjects ANOVA comparing the effect of normally presented and degraded words on response time.
+
+### Loading Packages
+
+- The tidyverse package is a collection of packages for data science. 
+- The afex package allows us to use the aov4 function to build the ANOVA model. 
+- The emmeans package is needed for follow up pairwise comparisons. 
+- The ggthemes package is needed to provide extra themes for making graphs.
+- The show text package is needed to use a wider range of fonts.
+- The scales package is used for the plot to override default axis breaks. 
+
+```{r, message=FALSE}
+
+
+library(tidyverse)
+library(afex)
+library(emmeans)
+library(ggthemes)
+library(showtext)
+library(scales)
+```
+
+### Reading in my data
+
+The read_csv function allows my data that is in this format to be imported.
+```{r, message=FALSE}
+my_data <- read_csv("https://raw.githubusercontent.com/Anna255731/exam_anova_1/main/assignment_dataset_1(1).csv")
+```
+
+### Data wrangling
+
+The next function will give the first 6 lines of my data in order to check it is layed out correctly.
+
+```{r}
+head(my_data)
+```
+
+The condition of word presentation is not coded as a factor. The next chunk of code uses the mutate function to code this experimental variable as a factor and rename the data to my_data_tidied. Using the head function again I can now see that the condition is coded as a factor.
+
+```{r, message=FALSE}
+my_data_tidied <- my_data %>%
+  mutate(condition = factor(condition))
+head(my_data_tidied)
+```
+
+Now I will use the levels function to change  the levels of the condition from condition a and b to Normal words and Degraded words, thus making it easier to understand my analysis. Using the head function again I can check that my code did achieve this.
+
+```{r, message=FALSE}
+levels(my_data_tidied$condition) <- c("Normal words", "Degraded words")
+  levels(my_data_tidied$condition)
+  head(my_data_tidied)
+```
+
+
+### Summary statistics
+
+I will now calculate the mean and standard deviation for both levels of the condition. 
+
+The group by function will ensure summary statistics are computed based on the levels of the condition.
+The summarise function is needed to reduce the data to a summary of the specified value, in this case mean and standard deviation.
+Results suggest response time is longest for visually degraded words with a mean of 1020ms and standard deviation 23.5ms, compared to a mean of 1002ms for normal words, standard deviation 21ms.
+
+```{r, message = FALSE}
+my_data_tidied %>%
+  group_by(condition) %>%
+  summarise(mean = mean(response_time), sd = sd(response_time))
+```
+
+
+### Building a plot of the effect of word presentation on response time
+
+Building a plot will allow me to visualise my data before building my model.This will give me an idea of the results to expect when I come to build my model. 
+
+First, I will install a new font using the font_add function and use showtext_auto to ensure this font can be displayed on my graph.
+```{r, message=FALSE}
+font_add("Palatino", "pala.ttf")
+showtext_auto()
+```
+
+
+Now for the plot:
+
+- The set seed function ensures the code run is reproducible due to setting a starting number for generating a random number sequence. 
+- ggplot is then used to plot the graph, using the aes function to specify the variables mapped to a visual cue.
+- The violin geom gives the shape of the distribution.
+- The jitter geom prevents points being plotted on top of each other.
+- The labs function plots the title for the plot and each axis.
+- The stat summary function plots the mean and confidence intervals.
+- The scale function plots the intervals on the y axis at the desired frequency with starting and ending limits set.
+- The guides function is used to remove the legend for the condition.
+- The theme function is used to firstly set the theme to igray and to then specify text size and font. Lastly, the theme function is used to specify the background fill colour for the panel and the colour and thickness for the border of the panel.
+
+```{r, message=FALSE, warning=FALSE}
+set.seed(1234)
+my_data_tidied %>% 
+ggplot(aes(x = condition, y = response_time, colour = condition)) +
+  geom_violin() +
+  geom_jitter(width = .1) +
+  labs(title = 'Effect of Visual Quality on Response Time'
+       , y = 'Response Time (ms)'
+       , x = 'Visual Quality') +
+  scale_y_continuous(breaks=seq(940, 1080, 20)) +
+  guides(colour = FALSE) +
+  stat_summary(fun.data = "mean_cl_boot", colour = "black") +
+  theme_igray() +
+  theme(text = element_text(size = 20)) +
+
+  theme(text = element_text(family = "Palatino")) +
+
+  theme(panel.background = element_rect(fill = "grey", 
+                                        colour = "grey",
+                                        size = 1, linetype = "solid")) 
+
+```
+
+From the plot, it looks as though response takes longer for degraded compared to normal words. Building a model will confirm this. 
+
+### Building my model
+
+The aov_4 function is used to build the ANOVA model. A between subjects ANOVA is used due to each participant only taking part in one level of the condition. Response time is specified as the dependent variable and condition as the independent variable. (1 | participant) corresponds to the random sample from the population/ the random effect term. 
+```{r, message=FALSE}
+anova_model <- aov_4(response_time ~ condition + (1 | participant), data = my_data_tidied)
+summary(anova_model) 
+```
+The one-way between subject ANOVA output is F= 15.828(1,94), p < 0.001, ges = 0.144. 
+From this we know that degraded words take significantly longer to respond to compared to normal words and the generalised eta squared (ges) tells us 14.4% of the variance in response time is explained by word presentation. 
+
+As there are only two levels to the word presentation condition and the direction of the relationship is known, no follow up tests are required. 
+
+
+## Question 2
+
+The same data will be used as in the previous model, but with additional information on caffeine intake. Thus, I will control for caffeine intake to see if this better explains the variance in response time.
+
+### Reading in my data
+```{r, message=FALSE}
+
+my_ancova_data <- read_csv("https://raw.githubusercontent.com/Anna255731/exam2_ANCOVA/main/assignment_dataset_2(1)%20(3).csv")
+head(my_ancova_data)
+```
+
+### Some data wrangling
+
+The condition is not coded as a factor so I will use the mutate function to ensure the experimental variable of word presentation is coded as a factor. The head function is then used to confirm this has worked.  
+
+```{r, message = FALSE}
+my_ancova_data_tidied <- my_ancova_data %>%
+  mutate(condition = factor(condition))
+head(my_ancova_data_tidied)
+```
+
+I will then ensure the levels of the condition are coded as normal and degraded words using the levels function. 
+```{r, message=FALSE}
+levels(my_ancova_data_tidied$condition) <- c("Normal words", "Degraded words")
+levels(my_ancova_data_tidied$condition)
+head(my_ancova_data_tidied)
+```
+
+Now I will ensure the condition is named visual quality. The rename function is used to do this.
+
+```{r}
+my_ancova_data_tidied <- my_ancova_data_tidied %>% 
+  rename(
+    Visual_quality = condition,
+  )
+head(my_ancova_data_tidied)
+```
+
+Summary statistics are then generated before removing the effect of caffeine, thus repeating the previous steps in question 1 up until this point. These values will be compared to the adjusted means when the covariate of caffeine is considered. 
+The "group by" function specifies that in this case statistics are generated based on the levels of the condition. The "summarise" function specifies that the calculation is of the mean and standard deviation. 
+
+```{r}
+my_ancova_data_tidied %>%
+  group_by(Visual_quality) %>%
+  summarise(mean = mean(response_time), sd = sd(response_time))
+
+```
+
+### Building a plot looking at the effect of caffeine on response time for both normal and visually degraded words
+
+This will allow the effect of caffeine on response time to be visually assessed before building a model where caffeine is included as a covariate. 
+
+- The set seed function ensures the code run is reproducible due to setting a starting number for generating a random number sequence. 
+- ggplot is then used to plot the graph, using the aes function to specify the variables mapped to a visual cue. The covariate is now plotted against response time with variables grouped separately by condition (shown by setting the levels of the condition to a different colour). 
+- The jitter geom prevents points being plotted on top of each other.
+- The labs function plots the title for the plot and for each axis.
+- The scale function plots the intervals on the x and y axis at the desired frequency with starting and ending limits set.
+- The theme function is used to firstly set the theme to igray and to then specify text size and font. 
+- Lastly, the theme function is used to specify the background fill colour for the panel and the colour and thickness for the border of the panel.
+
+
+From the plot, it is clear that caffeine does influence response time, but only for the degraded words, with a slight positive relationship between caffeine and response, with more caffeine resulting in a longer time to respond to degraded words. Although, it is also evident that people in this group drank more caffeine so the effect may therefore be that higher caffeine intake increases response time and not that caffeine intake combined with visually degraded words increases response time. 
+
+```{r}
+set.seed(1234)
+ggplot(my_ancova_data_tidied, aes(x = caffeine, y = response_time,  colour = Visual_quality)) + 
+  geom_jitter(width = .07, size = 1.5) +
+  labs(title = "The effect of caffeine consumption on response time to degraded versus normal words"
+  , x = "Caffeine consumption (cups of coffee)", 
+       y = "Response time (ms)") +
+  scale_y_continuous(breaks=seq(960, 1080, 20)) +
+  scale_x_continuous(breaks=seq(0, 6, 1)) +
+  theme_igray() +
+  theme(text = element_text(size = 20)) +
+  theme(text = element_text(family = "Palatino")) +
+  theme(panel.background = element_rect(fill = "grey", 
+                                        colour = "grey",
+                                        size = 1, linetype = "solid")) 
+```
+
+### Building my ancova model
+
+This will determine the influence of word presentation on response time when removing the influence of caffeine. Thus, could response time be better explained by caffeine intake?
+
+This is carried out in a similar format to the ANOVA conducted in question 1 using the aov4 function to model the effect of condition on response time. 
+Caffeine is now included as a predictor to see if there is still an effect of word presentation. Factorize is set to false, as caffeine is not a factor but a continuous predictor. (1 | participant) corresponds to the random sample from the population - random effect term. 
+
+
+```{r, warning=FALSE, message=FALSE}
+model_ancova <- aov_4(response_time ~ caffeine + Visual_quality + (1 | participant), 
+                      data = my_ancova_data_tidied, factorize = FALSE)
+anova(model_ancova)
+```
+From the model output, caffeine explains less of the variance in response time compared to word presentation but does reduce the effect of word presentation enough to mean it is no longer significant. The two models can be compared: 
+
+ANOVA model: (without effect of caffeine controlled for) F = 15.828(1,94), p < .001, ges = 0.144. 
+ANCOVA model: F = 3.571(1,93), p = .062, ges = 0.037. 
+Now, only 3.7% of the variance in response time is explained due to word presentation, down from 14.4%. 
+
+For caffeine: F = 1.137(1,93), p = .289, ges = 0.012.
+
+The variance in response time is not better explained by caffeine and the effect of word presentation is still greater than caffeine is, but removing the effect of caffeine does mean the effect of word presentation is no longer significant. From looking at the plot, this seems to be because caffeine consumption explained a lot of the variance in the visually degraded group but not the normal word group. Caffeine may therefore make it harder to respond to visually degraded words but not normal words. It is also evident that the visually degraded group coincidentally drank more caffeine than the normal word group, which may have also been why caffeine seemed to have more of an effect on response time in this group. 
+
+
+
+Adjusted means are then calculated using the emmeans function to see the effect of word presentation when removing the influence of caffeine. 
+
+```{r}
+emmeans(model_ancova, pairwise ~ Visual_quality)
+```
+
+The mean for normal words has increased slightly and mean for degraded words decreased slightly due to controlling for caffeine. Means and confidence intervals are reported below:
+
+Normal words = 1002 (996, 1009).
+
+Adjusted mean for normal words = 1005 (997, 1013).
+
+Degraded words = 1020 (1014, 1027).
+
+Adjusted mean for degraded words = 1018 (1010, 1026).
+
+
+
+### Part b: looking at ANCOVA as a case of regression to compare to my ANCOVA output. 
+
+
+I will use the contrast function to check the levels of my condition are coded correctly. Normal words will be the reference level, which is correct, as they are coded as 0 which will correspond to the intercept, and degraded words as 1.  
+```{r}
+contrasts(my_ancova_data_tidied$Visual_quality)
+```
+
+### Building an ANCOVA as a linear model
+
+The lm function is used to build the linear model. Response time is the dependent variable, caffeine is included as a covariate, with visual quality as the condition. 
+```{r}
+model_ancova2 <- lm(response_time ~ caffeine + Visual_quality, data = my_ancova_data_tidied)
+model_ancova2
+
+```
+
+Now the equation for calculating response time can be computed. The intercept of 998.55 corresponds to the coefficient for normal words. 
+
+- Mean response time for normal words= Intercept + (caffeine coefficient* mean for caffeine) + (Degraded words*0)
+- Mean response time for normal words = 998.55 + (2.489* caffeine mean) + (12.78*0)
+
+- Mean response time for degraded words = Intercept + (caffeine coefficient* mean for caffeine) + (degraded words*1)
+- Mean response time for degraded words = (998.55 + 2.489* caffeine mean) + (12.78*1)
+
+As caffeine is not a factor, its mean needs to be calculated in order to calculate the mean values for normal and degraded words. 
+This value is:
+```{r}
+mean(my_ancova_data_tidied$caffeine)
+```
+Mean for caffeine= 2.55
+
+Now the adjusted means for normal and degraded words can be calculated by inputting the mean for caffeine into the equation above. 
+
+This results in:
+
+- mean for normal words:1004.89 rounded to 1005
+- mean for degraded words:1017.68 rounded to 1018
+
+
+This is the same results as the adjusted means in the ANCOVA model above. 
+
+### Centering the covariate of caffeine
+
+Centering the covariate will allow calculation of the means without needing to multiply the coefficient of caffeine by its mean, thus making the equation simpler.
+The scale function is used to scale and centre the covariate so it is centered on zero. 
+
+```{r}
+my_scaled_data <- my_ancova_data_tidied %>%
+  mutate(centred_caffeine = scale(caffeine))
+```
+
+Now I will look at a plot for both the un-centered and centered covariate to check that nothing in the data has changed except from caffeine's mean being centered on zero.
+From the plots, I can see that this is the case. 
+```{r}
+plot(density(my_scaled_data$caffeine))
+plot(density(my_scaled_data$centred_caffeine))
+```
+
+
+Next, I will rebuild my linear model with the centered data.
+
+```{r}
+model_ancova_centred <- lm(response_time ~ centred_caffeine + Visual_quality, data = my_scaled_data)
+model_ancova_centred
+```
+
+Now the equations are simpler: mean for normal words is just the intercept and mean for degraded words is the intercept plus the coefficient for degraded words. 
+This results in the same values of 1004.9 rounded to 1005 for normal words and 1017.68 rounded to 10018 for degraded words. These values are the same as the adjusted means from the ANCOVA.
+
+
+
+
+
+## Question 3
+
+Now  I will run a factorial ANOVA on a new data set with two repeated measures independent variables each with two levels. The variables are target of a picture (positive or negative valence) and prime (positive or negative valence). My aim is to determine whether people respond faster to positive images following a positive or negative prime, and similarly whether people respond faster to negative images following a positive or negative prime. 
+
+
+### Reading in my data
+
+The "read csv" function allows me to read in my data in csv format and now I will use the head function to view the first 6 lines of my data.
+```{r, message=FALSE}
+factorial_data <- read_csv("https://raw.githubusercontent.com/Anna255731/examquestion3/main/assignment_dataset_3(1).csv")
+head(factorial_data)
+```
+
+Again, I will use the mutate function to ensure my independent variables are encoded as factors. 
+
+```{r, message=FALSE}
+factorial_data_tidied <- factorial_data %>%
+  mutate(prime= factor(prime), target = factor(target))
+head(factorial_data_tidied)
+```
+
+Now I will generate some summary statistics using the summarise function in addition to the group function to ensure I am generating the mean and standard deviation response time for each level of both independent variables.
+
+```{r, message=FALSE}
+factorial_data_tidied %>%
+  group_by(prime, target) %>%
+  summarise(mean_response_time = mean(response_time), sd_response_time = sd(response_time))
+
+```
+
+Mean and standard deviation for response time:
+
+- negative prime negative target: 1547(52.4)
+- positive prime negative target: 1567(54.0)
+
+
+- positive prime positive target: 1547(44.9)
+- negative prime positive target: 1563(50.5)
+
+
+### Building my plot
+
+- ggplot is used to plot the graph, using the aes function to specify the variables mapped to a visual cue. The colon in between context and sentence specifies that a combination of both of the factors should be plotted.
+- The violin geom gives the shape of the distribution.
+- The jitter geom prevents points being plotted on top of each other.
+- The stat summary function plots the mean and confidence intervals.
+- The scale function plots the intervals on the y axis at the desired frequency with starting and ending limits set. 
+- The theme function is used to firstly set the theme to igray and to then specify text size and font. The theme function is also used to specify the background fill colour for the panel and the colour and thickness for the border of the panel.
+- The labs function is used to specify the plot and axis titles. 
+- The facet wrap function then splits the plot based on the comparisons of interest. Therefore, the plot is split based on target so the comparison of positive versus negative prime for a positive target and also for a negative target can be viewed separately. This allows easier viewing of the data.
+
+
+```{r, warning=FALSE}
+factorial_data_tidied %>%
+  ggplot(aes(x = prime:target, y = response_time, colour = prime)) +
+  geom_violin() +
+  geom_jitter(width = .1, alpha = .25) +
+  stat_summary(fun.data = "mean_cl_boot", colour = "black", position = "dodge") +
+  scale_y_continuous(breaks=seq(1000, 1750, 25)) +
+  theme_igray() +
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank()) +
+  theme(text = element_text(size = 18)) +
+  theme(text = element_text(family = "Palatino")) +
+  theme(panel.background = element_rect(fill = "grey", 
+                                        colour = "grey",
+                                        size = 1, linetype = "solid"))  +
+  facet_wrap("target", scales = "free_x", strip.position = "bottom") +
+  labs(title = "Effect of valence of prime on response to target", x = "Target", y = "Response time (ms)")
+```
+
+From the summary statistics and the plot it is clear that a prime the of the same valence as the target facilitates faster response compared to an opposite valenced prime. Now, I will build a model to see if this effect is significant. 
+
+### Building a model for my factorial ANOVA
+
+I will use the aov4 function and specify the 2 main effects plus the interaction between prime and target using the *. 
+In addition, including 1 + prime * target within the brackets specifies the repeated measures design for both variables, rather than just 1 | participant. 
+
+```{r}
+model_factorial_anova <- aov_4(response_time ~ prime * target + (1 + prime * target | participant), data = factorial_data_tidied)
+
+anova(model_factorial_anova)
+```
+The main effect of prime was not significant, F(1,147) = 0.31, p = .577, ges = 0.0005.
+The main effect of target was also not significant, F(1,147) = 0.24, p = .628, ges = 0.0004. 
+However, the interaction was significant, F(1,147) = 17.18, p = < .001, ges = 0.029. 
+Thus, follow up comparisons are needed to determine how prime influences response to target. 
+
+
+### Follow up comparisons
+
+I will use the emmeans function to calculate the follow up comparisons between levels of the factors. 
+As there are only two comparisons of interest, (negative and positive prime for positive target and negative and positive prime for negative target), I will not use a bonferroni correction criterion and instead will manually adjust the p value. The alpha level will therefore be 0.025 as this is 0.05/2 (for the 2 comparisons).
+
+```{r}
+emmeans(model_factorial_anova, pairwise ~ prime * target, adjust = "none")
+```
+
+All values are reported with prime first target second:
+
+The negative negative condition took significantly less time to respond to compared to the positive negative condition, t = 3.13, p = .0021.
+The positive positive condition took significantly less time to respond to compared to the negative positive comndition, t = 2.91, p = .0042.
+
+Therefore, positive prime preceding positive target decreases response time compared to negative prime. Likewise, negative prime preceding negative target decreases response time compared to positive prime.
+Displaying a prime of matching valence to the target improves speed of responding compared to a prime of  different valence. 
